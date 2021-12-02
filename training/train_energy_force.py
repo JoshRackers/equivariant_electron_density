@@ -4,10 +4,11 @@ import torch
 import torch_geometric
 from torch_cluster import radius_graph
 from torch_scatter import scatter
-from ..utils import get_iso_dataset
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import get_iso_dataset
 from e3nn.nn.models.gate_points_2101 import Network
 from e3nn import o3
-from ..utils import get_scalar_density_comparisons
+from utils import get_scalar_density_comparisons
 import wandb
 import random
 from datetime import date

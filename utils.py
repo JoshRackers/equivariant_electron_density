@@ -276,12 +276,14 @@ def generate_grid(data, spacing=0.5, buffer=2.0):
     return x, y, z, vol, x_spacing, y_spacing, z_spacing
 
 
-import gau2grid as g2g
-from scipy import spatial
+#import gau2grid as g2g
+#from scipy import spatial
 
 # NOTE: I the units of x, y, z here are assumed to be angstrom
 #       I convert to bohr for gau2grid, but the grid remains in angstroms
 def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
+    import gau2grid
+    from scipy import spatial
     # note, this takes x, y and z as flattened arrays
     #r = np.array(np.sqrt(np.square(x) + np.square(y) + np.square(z)))
     xyz = np.vstack([x,y,z])
@@ -547,9 +549,10 @@ def get_dens(coords, full_coeffs, delta_coeffs, ml_coeffs, alpha, norm, xyz, rs,
 #     return l_target_density, l_ml_density
 
 
-import psi4
+#import psi4
 
 def compute_potential_field(xs,ys,zs,data,y_ml,Rs,interatomic=False,intermolecular=False, rad=3.0):
+    import psi4
     # xs,ys,zs are the vertices of the isosurface
     
     # define molecule

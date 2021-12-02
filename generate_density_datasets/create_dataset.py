@@ -7,7 +7,10 @@ import time
 import numpy as np
 import torch
 
-from flatten_list import flatten_list
+#sys.path.append("../")
+# get the utils.py module in the path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import flatten_list
 from itertools import zip_longest
 import periodictable as pt
 
