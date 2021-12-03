@@ -43,7 +43,7 @@ def main():
     lr = 1e-2
     model_kwargs = {
         "irreps_in": "2x 0e", #irreps_in 
-        "irreps_hidden": [(mul, l, p) for l, mul in enumerate([125,40,25,15]) for p in [-1, 1]], #irreps_hidden
+        "irreps_hidden": [(mul, (l, p)) for l, mul in enumerate([125,40,25,15]) for p in [-1, 1]], #irreps_hidden
         "irreps_out": "1x0e", #irreps_out
         "irreps_node_attr": None, #irreps_node_attr
         "irreps_edge_attr": o3.Irreps.spherical_harmonics(3), #irreps_edge_attr

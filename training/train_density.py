@@ -1,3 +1,5 @@
+import sys
+import os
 import math
 import numpy as np
 import torch
@@ -30,11 +32,11 @@ def main():
     torch.set_default_dtype(torch.float32)
 
     if args.qm == 'ccsd':
-        hhh = "../data/ccsd_h_s_only_def2-universal-jfit-decontract_density.out"
-        ooo = "../data/ccsd_o_s_only_def2-universal-jfit-decontract_density.out"
+        hhh = os.path.dirname(os.path.realpath(__file__)) + "/../data/ccsd_h_s_only_def2-universal-jfit-decontract_density.out"
+        ooo = os.path.dirname(os.path.realpath(__file__)) + "/../data/ccsd_o_s_only_def2-universal-jfit-decontract_density.out"
     else:
-        hhh = "../data/h_s_only_def2-universal-jfit-decontract_density.out"
-        ooo = "../data/o_s_only_def2-universal-jfit-decontract_density.out"
+        hhh = os.path.dirname(os.path.realpath(__file__)) + "/../data/h_s_only_def2-universal-jfit-decontract_density.out"
+        ooo = os.path.dirname(os.path.realpath(__file__)) + "/../data/o_s_only_def2-universal-jfit-decontract_density.out"
 
     test_dataset = args.testset
     num_epochs = args.epochs
@@ -43,7 +45,7 @@ def main():
     # WARNING. this is currently hard-coded for def2_universal
     Rs = [(12, 0), (5, 1), (4, 2), (2, 3), (1, 4)]
 
-    test_dataset = get_iso_permuted_dataset(args.testset),o_iso=ooo,h_iso=hhh)
+    test_dataset = get_iso_permuted_dataset(args.testset,o_iso=ooo,h_iso=hhh)
 
     split = args.split
     data_file = args.dataset
@@ -52,7 +54,7 @@ def main():
     save_interval = 5
     model_kwargs = {
         "irreps_in": "2x 0e", #irreps_in 
-        "irreps_hidden": [(mul, l, p) for l, mul in enumerate([125,40,25,15]) for p in [-1, 1]], #irreps_hidden
+        "irreps_hidden": [(mul, (l, p)) for l, mul in enumerate([125,40,25,15]) for p in [-1, 1]], #irreps_hidden
         "irreps_out": "12x0e + 5x1o + 4x2e + 2x3o + 1x4e", #irreps_out
         "irreps_node_attr": None, #irreps_node_attr
         "irreps_edge_attr": o3.Irreps.spherical_harmonics(3), #irreps_edge_attr
@@ -66,10 +68,10 @@ def main():
         "reduce_output": False,
     }
 
-    dataset = get_iso_permuted_dataset(data_file,ooo,hhh)
+    dataset = get_iso_permuted_dataset(data_file,o_iso=ooo,h_iso=hhh)
     random.shuffle(dataset)
     if split > len(dataset):
-        raise ValueError('Split it too large for the dataset.')
+        raise ValueError('Split is too large for the dataset.')
     
     b = 1
     train_loader = torch_geometric.data.DataLoader(dataset[:split], batch_size=b, shuffle=True)

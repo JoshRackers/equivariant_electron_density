@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# wandb
+**/wandb
+
+# psi4
+*timer.dat
+

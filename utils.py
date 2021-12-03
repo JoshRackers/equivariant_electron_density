@@ -26,6 +26,7 @@ def get_iso_permuted_dataset(picklefile, **atm_iso):
     import torch
     import torch_geometric
     import copy
+    import numpy as np
 
     dataset = []
 
@@ -53,24 +54,27 @@ def get_iso_permuted_dataset(picklefile, **atm_iso):
         c = molecule['coefficients']
         n = molecule['norms']
         exp = molecule['exponents']
+
+        full_c = copy.deepcopy(c)        
+        iso_c = torch.zeros_like(c)
         
-        energy = molecule['energy']
-        forces = molecule['forces']
-
-        full_c = copy.deepcopy(c)
-
         #now subtract the isolated atoms
-        for atom, typ in zip(c,z):
+        for atom, iso, typ in zip(c,iso_c,z):
             if typ.item() == 1.0:
                 atom[:list(h_data.shape)[0]] -= h_data
+                iso[:list(h_data.shape)[0]] += h_data
             elif typ.item() == 6.0:
                 atom[:list(c_data.shape)[0]] -= c_data
+                iso[:list(c_data.shape)[0]] += c_data
             elif typ.item() == 7.0:
                 atom[:list(n_data.shape)[0]] -= n_data
+                iso[:list(n_data.shape)[0]] += n_data
             elif typ.item() == 8.0:
                 atom[:list(o_data.shape)[0]] -= o_data
+                iso[:list(o_data.shape)[0]] += o_data
             elif typ.item() == 15.0:
                 atom[:list(p_data.shape)[0]] -= p_data
+                iso[:list(p_data.shape)[0]] += p_data
             else:
                 raise ValueError("Isolated atom type not supported!")
 
@@ -89,10 +93,9 @@ def get_iso_permuted_dataset(picklefile, **atm_iso):
                                               y=pop.to(torch.float32), 
                                               c=c.to(torch.float32), 
                                               full_c=full_c.to(torch.float32), 
+                                              iso_c=iso_c.to(torch.float32), 
                                               exp=exp.to(torch.float32), 
-                                              norm=n.to(torch.float32),
-                                              energy=energy.to(torch.float32),
-                                              forces=forces.to(torch.float32))]
+                                              norm=n.to(torch.float32))]
 
     return dataset
 
@@ -103,6 +106,7 @@ def get_iso_dataset(picklefile, **atm_iso):
     import torch
     import torch_geometric
     import copy
+    import numpy as np
 
     dataset = []
 
@@ -187,6 +191,7 @@ def get_iso_dataset(picklefile, **atm_iso):
 
 def electron_error(dimer_num, true_coeffs, ml_output_coeffs, exponents, norms, Rs_outs):
     ## check number of electrons
+    import numpy as np
 
     coeffs = true_coeffs
     output_coeffs = ml_output_coeffs
@@ -245,6 +250,8 @@ def find_min_max(coords):
 
 
 def generate_grid(data, spacing=0.5, buffer=2.0):
+    import numpy as np
+
     buf = buffer
     xmin, xmax, ymin, ymax, zmin, zmax = find_min_max(data.pos_orig.cpu().detach().numpy())
     #buf = 2.5
@@ -279,10 +286,11 @@ def generate_grid(data, spacing=0.5, buffer=2.0):
 #import gau2grid as g2g
 #from scipy import spatial
 
-# NOTE: I the units of x, y, z here are assumed to be angstrom
+# NOTE: The units of x, y, z here are assumed to be angstrom
 #       I convert to bohr for gau2grid, but the grid remains in angstroms
 def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
-    import gau2grid
+    import numpy as np
+    import gau2grid as g2g
     from scipy import spatial
     # note, this takes x, y and z as flattened arrays
     #r = np.array(np.sqrt(np.square(x) + np.square(y) + np.square(z)))
@@ -354,6 +362,7 @@ def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
 
 
 def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0):
+    import numpy as np
     # generate grid in xyz input units (angstroms)
     x,y,z,vol,x_spacing,y_spacing,z_spacing = generate_grid(data, spacing=spacing, buffer=buffer)
     # get density on grid
@@ -455,104 +464,9 @@ def get_dens(coords, full_coeffs, delta_coeffs, ml_coeffs, alpha, norm, xyz, rs,
     return atom_target_density, atom_ml_density
 
 
-
-
-
-# def gau2grid_density_parallel2(x, y, z, data, ml_y, rs):
-#     # note, this takes x, y and z as flattened arrays
-#     r = np.array(np.sqrt(np.square(x) + np.square(y) + np.square(z)))
-#     xyz = np.vstack([x,y,z])
-#     num_atoms = ml_y.shape[0]
-#     nxyz = np.stack([xyz]*num_atoms)
-#     nrs = np.stack([rs]*num_atoms)
-#     #nrs = list(itertools.repeat(rs, num_atoms))
-#     #print(nrs)
-    
-# #     print(nxyz.shape)
-# #     print(data.pos.cpu().detach().numpy().shape)
-# #     print(data.full_c.cpu().detach().numpy().shape)
-        
-#     ml_density = np.zeros_like(x)
-#     target_density = np.zeros_like(x)
-    
-#     with futures.ProcessPoolExecutor() as pool:
-#         for total in pool.map(get_dens2, data.pos.cpu().detach().numpy(), data.full_c.cpu().detach().numpy(), data.c.cpu().detach().numpy(), ml_y.cpu().detach().numpy(), data.exp.cpu().detach().numpy(), data.norm.cpu().detach().numpy(), nxyz, nrs):
-#             target_density += total[0]
-#             ml_density += total[1]
-                    
-#     return target_density, ml_density
-
-
-
-# def get_dens2(coords, full_coeffs, delta_coeffs, ml_coeffs, alpha, norm, xyz, rs):
-#     atom_ml_density = np.zeros_like(xyz[0])
-#     atom_target_density = np.zeros_like(xyz[0])
-#     counter = 0
-#     num_rs = len(rs)
-#     #print(rs)
-#     #print(num_rs)
-#     nrs_coords = np.stack([coords]*num_rs)
-#     nrs_full_coeffs = np.stack([full_coeffs]*num_rs)
-#     nrs_delta_coeffs = np.stack([delta_coeffs]*num_rs)
-#     nrs_ml_coeffs = np.stack([ml_coeffs]*num_rs)
-#     nrs_alpha = np.stack([alpha]*num_rs)
-#     nrs_norm = np.stack([norm]*num_rs)
-#     nrs_xyz = np.stack([xyz]*num_rs)
-    
-#     #compute starting points from rs
-#     starting_points = []
-#     count = 0
-#     for mul, l in rs:
-#         starting_points.append(count)
-#         count += mul*(2*l + 1)
-        
-    
-#     with futures.ProcessPoolExecutor() as pool:
-#         for total in pool.map(get_l, nrs_coords, nrs_full_coeffs, nrs_delta_coeffs, nrs_ml_coeffs, nrs_alpha, nrs_norm, nrs_xyz, rs, starting_points):
-#             atom_target_density += total[0]
-#             atom_ml_density += total[1]
-            
-#     return atom_target_density, atom_ml_density
-
-            
-# def get_l(coords, full_coeffs, delta_coeffs, ml_coeffs, alpha, norm, xyz, rs, starting_point):
-#     l_ml_density = np.zeros_like(xyz[0])
-#     l_target_density = np.zeros_like(xyz[0])
-    
-#     mul = rs[0]
-#     l = rs[1]
-#     center = coords
-#     # need to get starting point from rs
-#     counter = starting_point
-#     for j in range(mul):
-#         normal = norm[counter]
-#         exp = [alpha[counter]]
-#         ret_target = g2g.collocation(xyz, l, [1], exp, center) 
-#         ret_ml = g2g.collocation(xyz, l, [1], exp, center)
-
-#         target_full_coeffs = full_coeffs[counter:counter+(2*l + 1)]
-#         scaled_components = (target_full_coeffs * normal * ret_target["PHI"].T).T
-#         target_tot = np.sum(scaled_components, axis=0)
-
-#         pop_ml = ml_coeffs[counter:counter+(2*l + 1)]
-#         c_ml = pop_ml * normal / (2 * np.sqrt(2))
-#         target_delta_coeffs = delta_coeffs[counter:counter+(2*l + 1)]
-#         ml_full_coeffs = target_full_coeffs + c_ml - target_delta_coeffs
-#         ml_scaled_components = (ml_full_coeffs * normal * ret_target["PHI"].T).T
-#         ml_tot = np.sum(ml_scaled_components, axis=0)
-
-#         counter += 2*l + 1
-        
-#         l_target_density += target_tot
-#         l_ml_density += ml_tot
-    
-#     return l_target_density, l_ml_density
-
-
-#import psi4
-
 def compute_potential_field(xs,ys,zs,data,y_ml,Rs,interatomic=False,intermolecular=False, rad=3.0):
     import psi4
+    import numpy as np
     # xs,ys,zs are the vertices of the isosurface
     
     # define molecule
