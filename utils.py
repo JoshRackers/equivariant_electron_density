@@ -583,6 +583,8 @@ def compute_potential_field(xs,ys,zs,data,y_ml,Rs,interatomic=False,intermolecul
 
 
 def get_ele_potential_field(position, ints, results, nbf, data, ml_delta_pop, Rs, zero_atom=None): 
+    import numpy as np
+    import psi4
     # get the coefficients
     target_coeffs = data.full_c.cpu().detach().numpy()
     
@@ -643,6 +645,8 @@ def get_ele_potential_field(position, ints, results, nbf, data, ml_delta_pop, Rs
     
     
 def e3nn_2_psi4_ordering(coeffs,Rs):
+    import numpy as np
+    
     list_coeffs = []
     for atom in coeffs:
         coeffs_list = []
