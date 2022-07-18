@@ -101,6 +101,8 @@ def get_densities(filepath,dens_file,elements,num_atoms):
     D: 0, +1, -1, +2, -2	
     F: 0, +1, -1, +2, -2, +3, -3	
     G: 0, +1, -1, +2, -2, +3, -3, +4, -4
+    H: 0, +1, -1, +2, -2, +3, -3, +4, -4, +5, -5
+    I: 0, +1, -1, +2, -2, +3, -3, +4, -4, +5, -5, +6, -6
 
     #e3nn (wikipedia)
     S: 0	
@@ -108,10 +110,12 @@ def get_densities(filepath,dens_file,elements,num_atoms):
     D: -2, -1, 0, +1, +2	
     F: -3, -2, -1, 0, +1, +2, +3	
     G: -4, -3, -2, -1, 0, +1, +2, +3, +4
+    H: -5, -4, -3, -2, -1, 0, +1, +2, +3, +4, +5
+    I: -6, -5, -4, -3, -2, -1, 0, +1, +2, +3, +4, +5, +6
     '''
     
-    ##              s     p         d             f                 g
-    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7]]
+    ##              s     p         d             f                 g                      h                           i
+    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7],[10,8,6,4,2,0,1,3,5,7,9],[12,10,8,6,4,2,0,1,3,5,7,9,11]]
     
     '''
     test = [[0],[0, +1, -1],[0, +1, -1, +2, -2],[0, +1, -1, +2, -2, +3, -3],	
@@ -127,8 +131,8 @@ def get_densities(filepath,dens_file,elements,num_atoms):
     for i, atom in enumerate(newbasis_coeffs):
         for j, item in enumerate(atom):
             l = (len(item)-1)//2
-            if l > 4:
-                raise ValueError('L is too high. Currently only supports L<5')
+            if l > 6:
+                raise ValueError('L is too high. Currently only supports L<7')
             newbasis_coeffs[i][j] = [item[k] for k in psi4_2_e3nn[l]]
 
 
