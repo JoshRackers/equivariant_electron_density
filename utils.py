@@ -334,11 +334,12 @@ def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
 
                     ret_target = g2g.collocation(points*angstrom2bohr, l, [1], exp, center*angstrom2bohr) 
                     ret_ml = g2g.collocation(points*angstrom2bohr, l, [1], exp, center*angstrom2bohr)
-
+                    
                     # Now permute back to psi4 ordering
-                    ##              s     p         d             f                 g
-                    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7]]
-                    e3nn_2_psi4 = [[0],[1,2,0],[2,3,1,4,0],[3,4,2,5,1,6,0],[4,5,3,6,2,7,1,8,0]]
+                    ##              s     p         d             f                 g                      h                           i
+                    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7],[10,8,6,4,2,0,1,3,5,7,9],[12,10,8,6,4,2,0,1,3,5,7,9,11]]
+                    e3nn_2_psi4 = [[0],[1,2,0],[2,3,1,4,0],[3,4,2,5,1,6,0],[4,5,3,6,2,7,1,8,0],[5,6,4,7,3,8,2,9,1,10,0],[6,7,5,8,4,9,3,10,2,11,1,12,0]]
+                    
                     target_full_coeffs = np.array([target_full_coeffs[k] for k in e3nn_2_psi4[l]])
                     ml_full_coeffs = np.array([ml_full_coeffs[k] for k in e3nn_2_psi4[l]])
                     
@@ -658,9 +659,9 @@ def e3nn_2_psi4_ordering(coeffs,Rs):
                 counter += step
         list_coeffs.append(coeffs_list)
         
-    ##              s     p         d             f                 g
-    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7]]
-    e3nn_2_psi4 = [[0],[1,2,0],[2,3,1,4,0],[3,4,2,5,1,6,0],[4,5,3,6,2,7,1,8,0]]
+    ##              s     p         d             f                 g                      h                           i
+    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7],[10,8,6,4,2,0,1,3,5,7,9],[12,10,8,6,4,2,0,1,3,5,7,9,11]]
+    e3nn_2_psi4 = [[0],[1,2,0],[2,3,1,4,0],[3,4,2,5,1,6,0],[4,5,3,6,2,7,1,8,0],[5,6,4,7,3,8,2,9,1,10,0],[6,7,5,8,4,9,3,10,2,11,1,12,0]]
     
     '''
     test = [[0],[-1, 0, +1],[-2, -1, 0, +1, +2],[-3, -2, -1, 0, +1, +2, +3],[-4, -3, -2, -1, 0, +1, +2, +3, +4]]
@@ -678,8 +679,8 @@ def e3nn_2_psi4_ordering(coeffs,Rs):
         for j, item in enumerate(atom):
             #print(item)
             l = (len(item)-1)//2
-            if l > 4:
-                raise ValueError('L is too high. Currently only supports L<5')
+            if l > 6:
+                raise ValueError('L is too high. Currently only supports L<7')
             list_coeffs[i][j] = [item[k] for k in e3nn_2_psi4[l]]
         
     rect_coeffs = []
