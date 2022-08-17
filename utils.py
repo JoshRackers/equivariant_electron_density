@@ -288,7 +288,7 @@ def generate_grid(data, spacing=0.5, buffer=2.0):
 
 # NOTE: The units of x, y, z here are assumed to be angstrom
 #       I convert to bohr for gau2grid, but the grid remains in angstroms
-def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
+def gau2grid_density_kdtree(x, y, z, data, ml_y, rs, ldepb=False):
     import numpy as np
     import gau2grid as g2g
     from scipy import spatial
@@ -299,6 +299,10 @@ def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
     
     ml_density = np.zeros_like(x)
     target_density = np.zeros_like(x)
+
+    #l-indexed arrays to dump specific contributions to density
+    ml_density_per_l = np.array([np.zeros_like(x), np.zeros_like(x), np.zeros_like(x), np.zeros_like(x), np.zeros_like(x)])
+    target_density_per_l = np.array([np.zeros_like(x), np.zeros_like(x), np.zeros_like(x),np.zeros_like(x),np.zeros_like(x)])
     
     for coords, full_coeffs, iso_coeffs, ml_coeffs, alpha, norm in zip(data.pos_orig.cpu().detach().numpy(), data.full_c.cpu().detach().numpy(), data.iso_c.cpu().detach().numpy(), ml_y.cpu().detach().numpy(), data.exp.cpu().detach().numpy(), data.norm.cpu().detach().numpy()):
         center = coords
@@ -357,21 +361,45 @@ def gau2grid_density_kdtree(x, y, z, data, ml_y, rs):
                     target_density[close_indices] += target_tot
                     ml_density[close_indices] += ml_tot
 
+                    # dump l-dependent contributions
+
+                    target_density_per_l[l][close_indices]+= target_tot
+                    ml_density_per_l[l][close_indices] += ml_tot
+
                 counter += 2*l + 1
                     
-    return target_density, ml_density
+    if ldepb:                  
+        return target_density, ml_density, target_density_per_l, ml_density_per_l
+    else:
+        return target_density, ml_density
 
 
-def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0):
+def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0, ldep=False):
     import numpy as np
     # generate grid in xyz input units (angstroms)
     x,y,z,vol,x_spacing,y_spacing,z_spacing = generate_grid(data, spacing=spacing, buffer=buffer)
     # get density on grid
-    target_density, ml_density = gau2grid_density_kdtree(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs)
+    
+    #l-dependent eps
+    ep_per_l = np.zeros(len(Rs))
+
+    if ldep:
+        target_density, ml_density, target_density_per_l, ml_density_per_l = gau2grid_density_kdtree(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs, ldepb=ldep)
+        #fill l-dependent eps in this case
+        for l in range(len(Rs)):
+            ep_per_l[l] = 100 * np.sum(np.abs(ml_density_per_l[l]-target_density_per_l[l])) / np.sum(target_density)
+
+
+    else:
+        target_density, ml_density = gau2grid_density_kdtree(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs,ldepb=ldep)
     
     # density is in e-/bohr**3
     angstrom2bohr = 1.8897259886
     bohr2angstrom = 1/angstrom2bohr
+
+    #n_ele = np.sum(data.z.cpu().detach().numpy())
+    #ep = 100 * vol * (angstrom2bohr**3) * np.sum(np.abs(target_density - ml_density)) / n_ele
+    ep = 100 * np.sum(np.abs(ml_density-target_density)) / np.sum(target_density)
     
     num_ele_target = np.sum(target_density)*vol*angstrom2bohr**3
     num_ele_ml = np.sum(ml_density)*vol*angstrom2bohr**3
@@ -380,11 +408,9 @@ def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0):
     denom = np.sum(ml_density**2) + np.sum(target_density**2)
     bigI = numer/denom
     
-    #n_ele = np.sum(data.z.cpu().detach().numpy())
-    #ep = 100 * vol * (angstrom2bohr**3) * np.sum(np.abs(target_density - ml_density)) / n_ele
-    ep = 100 * np.sum(np.abs(ml_density-target_density)) / np.sum(target_density)
+    if ldep: return num_ele_target, num_ele_ml, bigI, ep, ep_per_l
     
-    return num_ele_target, num_ele_ml, bigI, ep
+    else: return num_ele_target, num_ele_ml, bigI, ep
 
 
 from concurrent import futures
