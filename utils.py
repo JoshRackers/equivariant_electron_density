@@ -181,8 +181,192 @@ def get_iso_dataset(picklefile, **atm_iso):
 
     return dataset
 
+# experimental version to rescale populations based on L-dependence
+# use with gau2grid_density_kdtree_lpop_sale
 
+def get_iso_permuted_dataset_lpop_scale(picklefile, rs, **atm_iso):
+    amberFlag=0
+    import math
+    import pickle
+    import torch
+    import torch_geometric
+    import copy
 
+    dataset = []
+
+    print(rs)
+
+    for key, value in atm_iso.items():
+        if key=='h_iso':
+            h_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        elif key=='c_iso':
+            c_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        elif key=='n_iso':
+            n_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        elif key=='o_iso':
+            o_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        elif key=='p_iso':
+            p_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        elif key=='mg_iso':
+            mg_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        elif key=='cl_iso':
+            cl_data = torch.Tensor(np.loadtxt(value,skiprows=2,usecols=1))
+        else:
+            raise ValueError("Isolated atom type not found. Use kwargs \"h_iso\", \"c_iso\", etc.")
+
+    for molecule in pickle.load( open (picklefile, "rb")):
+        pos = molecule['pos']
+        # z is atomic number- may want to make 1,0
+        z = molecule['type'].unsqueeze(1)
+
+        x = molecule['onehot']
+
+        c = molecule['coefficients']
+        n = molecule['norms']
+        exp = molecule['exponents']
+
+        full_c = copy.deepcopy(c)
+        iso_c = torch.zeros_like(c)
+
+        if amberFlag==1:
+            amber_chg = molecule['amber_chg']
+
+        #now subtract the isolated atoms
+        for atom, iso, typ in zip(c,iso_c,z):
+            if typ.item() == 1.0:
+                atom[:list(h_data.shape)[0]] -= h_data
+                iso[:list(h_data.shape)[0]] += h_data
+            elif typ.item() == 6.0:
+                atom[:list(c_data.shape)[0]] -= c_data
+                iso[:list(c_data.shape)[0]] += c_data
+            elif typ.item() == 7.0:
+                atom[:list(n_data.shape)[0]] -= n_data
+                iso[:list(n_data.shape)[0]] += n_data
+            elif typ.item() == 8.0:
+                atom[:list(o_data.shape)[0]] -= o_data
+                iso[:list(o_data.shape)[0]] += o_data
+            elif typ.item() == 15.0:
+                atom[:list(p_data.shape)[0]] -= p_data
+                iso[:list(p_data.shape)[0]] += p_data
+            elif typ.item() == 12.0:
+                atom[:list(p_data.shape)[0]] -= mg_data
+                iso[:list(p_data.shape)[0]] += mg_data
+            elif typ.item() == 17.0:
+                atom[:list(p_data.shape)[0]] -= cl_data
+                iso[:list(p_data.shape)[0]] += cl_data
+            else:
+                raise ValueError("Isolated atom type not supported!")
+
+        pop = torch.zeros_like(c)
+
+        # loop over atoms
+        for atom_ind in range(np.shape(c)[0]):
+
+            # count coeffs from rs
+            coeff_count = 0
+            for rs_val in rs:
+                l = rs_val[1]
+                ltot = 2*l+1
+                coeff_count+=rs_val[0]*ltot
+
+            if coeff_count!=np.shape(c)[1]:
+                print("ERROR! Number of coefficients does not match given Rs. Exiting")
+                exit()
+
+            # loop over coefficients; populations are scaled based on L
+            # NOTE: for L>1, a_parm is approximate since multiplicities 2L+1 seem to have slightly different normalization constants
+            c_ind = 0
+            for mul, l in rs:
+                ltot = 2*l+1
+                for j in range(mul):
+                    for l_ind in range(ltot):
+                        c_temp = c[atom_ind][c_ind]
+                        n_temp = n[atom_ind][c_ind]
+                        exp_temp = exp[atom_ind][c_ind]
+
+                        if l==0 and n_temp!=0:
+                            a_parm=0.179587122
+                            k_parm=1.5
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif l==1 and n_temp!=0:
+                            a_parm=0.318331109
+                            k_parm=2.0
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif l==2 and n_temp!=0:
+                            a_parm=0.325745866
+                            k_parm=2.5
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif l==3 and n_temp!=0:
+                            a_parm=0.258233318
+                            k_parm=3.0
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif l==4 and n_temp!=0:
+                            a_parm=0.179846782
+                            k_parm=3.5
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif l==5 and n_temp!=0:
+                            a_parm=0.110014638
+                            k_parm=4.0
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif l==6 and n_temp!=0:
+                            a_parm=0.0618332085880726
+                            k_parm=4.5
+                            b_parm = a_parm*exp_temp**k_parm
+
+                            pop[atom_ind][c_ind]=c_temp*n_temp/b_parm
+                        elif n_temp==0:
+                            pop[atom_ind][c_ind]=0.0
+                        else:
+                            print("ERROR: Unknown option for L ", l)
+                            exit()
+                        c_ind += 1
+
+        #now permute, yzx -> xyz
+        p_pos = copy.deepcopy(pos)
+        p_pos[:,0] = pos[:,1]
+        p_pos[:,1] = pos[:,2]
+        p_pos[:,2] = pos[:,0]
+
+        if amberFlag==1:
+
+            dataset += [torch_geometric.data.Data(pos=p_pos.to(torch.float32),
+                                              pos_orig=pos.to(torch.float32),
+                                              z=z.to(torch.float32),
+                                              x=x.to(torch.float32),
+                                              y=pop.to(torch.float32),
+                                              c=c.to(torch.float32),
+                                              full_c=full_c.to(torch.float32),
+                                              iso_c=iso_c.to(torch.float32),
+                                              exp=exp.to(torch.float32),
+                                              norm=n.to(torch.float32),
+                                              amber_chg=amber_chg.to(torch.float32))]
+
+        else:
+
+            dataset += [torch_geometric.data.Data(pos=p_pos.to(torch.float32),
+                                              pos_orig=pos.to(torch.float32),
+                                              z=z.to(torch.float32),
+                                              x=x.to(torch.float32),
+                                              y=pop.to(torch.float32),
+                                              c=c.to(torch.float32),
+                                              full_c=full_c.to(torch.float32),
+                                              iso_c=iso_c.to(torch.float32),
+                                              exp=exp.to(torch.float32),
+                                              norm=n.to(torch.float32))]
+
+    return dataset
 
 
 # define a function to return the number of electrons in the target
@@ -373,6 +557,130 @@ def gau2grid_density_kdtree(x, y, z, data, ml_y, rs, ldepb=False):
     else:
         return target_density, ml_density
 
+# use with get_iso_permuted_dataset_lpop_scale
+def gau2grid_density_kdtree_lpop_scale(x, y, z, data, ml_y, rs, isoOnlyFlag=0):
+
+    # note, this takes x, y and z as flattened arrays
+    #r = np.array(np.sqrt(np.square(x) + np.square(y) + np.square(z)))
+    xyz = np.vstack([x,y,z])
+    tree = spatial.cKDTree(xyz.T)
+
+    ml_density = np.zeros_like(x)
+    ml_density_pos = np.zeros_like(x)
+    ml_density_neg = np.zeros_like(x)
+    target_density = np.zeros_like(x)
+
+    for coords, full_coeffs, iso_coeffs, ml_coeffs, alpha, norm in zip(data.pos_orig.cpu().detach().numpy(), data.full_c.cpu().detach().numpy(), data.iso_c.cpu().detach().numpy(), ml_y.cpu().detach().numpy(), data.exp.cpu().detach().numpy(), data.norm.cpu().detach().numpy()):
+        center = coords
+        counter = 0
+        for mul, l in rs:
+            #print("Rs",mul,l)
+            for j in range(mul):
+                normal = norm[counter]
+                if normal != 0:
+                    exp = [alpha[counter]]
+
+                    small = 1e-10
+                    angstrom2bohr = 1.8897259886
+                    bohr2angstrom = 1/angstrom2bohr
+
+                    target_full_coeffs = full_coeffs[counter:counter+(2*l + 1)]
+
+                    pop_ml = ml_coeffs[counter:counter+(2*l + 1)]
+
+                    if len(exp)!=1:
+                        print("ERROR: Too many exps. Exit")
+                        exit()
+
+                    if l==0:
+                        a_parm=0.179587122
+                        k_parm=1.5
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    elif l==1:
+                        a_parm=0.318331109
+                        k_parm=2.0
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    elif l==2:
+                        a_parm=0.325745866
+                        k_parm=2.5
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    elif l==3:
+                        a_parm=0.258233318
+                        k_parm=3.0
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    elif l==4:
+                        a_parm=0.179846782
+                        k_parm=3.5
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    elif l==5:
+                        a_parm=0.110014638
+                        k_parm=4.0
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    elif l==6:
+                        a_parm=0.0618332085880726
+                        k_parm=4.5
+                        b_parm = a_parm*exp[0]**k_parm
+
+                        c_ml = pop_ml * b_parm/normal
+                    else:
+                        print("ERROR: Unknown option for L ", l)
+                        exit()
+
+                    if isoOnlyFlag==1:
+                        c_ml = 0.0 # ML coeff set to 0.0; only isolated atom used
+
+                    ml_full_coeffs = c_ml + iso_coeffs[counter:counter+(2*l + 1)]
+
+                    target_max = np.amax(np.abs(target_full_coeffs))
+                    ml_max = np.amax(np.abs(ml_full_coeffs))
+                    max_c = np.amax(np.array([target_max, ml_max]))
+
+                    cutoff = np.sqrt((-1/exp[0])*np.log(small/np.abs(max_c*normal)))*bohr2angstrom
+
+                    close_indices = tree.query_ball_point(center,cutoff)
+                    points = np.require(xyz[:,close_indices], requirements=['C','A'])
+
+                    ret_target = g2g.collocation(points*angstrom2bohr, l, [1], exp, center*angstrom2bohr)
+                    ret_ml = g2g.collocation(points*angstrom2bohr, l, [1], exp, center*angstrom2bohr)
+
+
+                    # Now permute back to psi4 ordering
+                    ##              s     p         d             f                 g
+                    psi4_2_e3nn = [[0],[2,0,1],[4,2,0,1,3],[6,4,2,0,1,3,5],[8,6,4,2,0,1,3,5,7],[10,8,6,4,2,0,1,3,5,7,9],[12,10,8,6,4,2,0,1,3,5,7,9,11]]
+                    e3nn_2_psi4 = [[0],[1,2,0],[2,3,1,4,0],[3,4,2,5,1,6,0],[4,5,3,6,2,7,1,8,0],[5,6,4,7,3,8,2,9,1,10,0],[6,7,5,8,4,9,3,10,2,11,1,12,0]]
+                    target_full_coeffs = np.array([target_full_coeffs[k] for k in e3nn_2_psi4[l]])
+                    ml_full_coeffs = np.array([ml_full_coeffs[k] for k in e3nn_2_psi4[l]])
+
+                    #target_full_coeffs = full_coeffs[counter:counter+(2*l + 1)]
+                    scaled_components = (target_full_coeffs * normal * ret_target["PHI"].T).T
+                    target_tot = np.sum(scaled_components, axis=0)
+
+                    #pop_ml = ml_coeffs[counter:counter+(2*l + 1)]
+                    #c_ml = pop_ml * normal / (2 * np.sqrt(2))
+                    #target_delta_coeffs = delta_coeffs[counter:counter+(2*l + 1)]
+                    #ml_full_coeffs = target_full_coeffs + c_ml - target_delta_coeffs
+                    ml_scaled_components = (ml_full_coeffs * normal * ret_target["PHI"].T).T
+                    ml_tot = np.sum(ml_scaled_components, axis=0)
+
+                    target_density[close_indices] += target_tot
+                    ml_density[close_indices] += ml_tot
+
+                counter += 2*l + 1
+
+    return target_density, ml_density
+    
 
 def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0, ldep=False):
     import numpy as np
@@ -385,6 +693,7 @@ def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0, ldep
 
     if ldep:
         target_density, ml_density, target_density_per_l, ml_density_per_l = gau2grid_density_kdtree(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs, ldepb=ldep)
+        #target_density, ml_density, target_density_per_l, ml_density_per_l = gau2grid_density_kdtree_lpop_scale(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs, ldepb=ldep)
         #fill l-dependent eps in this case
         for l in range(len(Rs)):
             ep_per_l[l] = 100 * np.sum(np.abs(ml_density_per_l[l]-target_density_per_l[l])) / np.sum(target_density)
@@ -392,6 +701,7 @@ def get_scalar_density_comparisons(data, y_ml, Rs, spacing=0.5, buffer=2.0, ldep
 
     else:
         target_density, ml_density = gau2grid_density_kdtree(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs,ldepb=ldep)
+        #target_density, ml_density = gau2grid_density_kdtree_lpop_scale(x.flatten(),y.flatten(),z.flatten(),data,y_ml,Rs,ldepb=ldep)
     
     # density is in e-/bohr**3
     angstrom2bohr = 1.8897259886
@@ -718,5 +1028,182 @@ def e3nn_2_psi4_ordering(coeffs,Rs):
     
     return new_coeffs
 
+def compute_amber_potential(xs,ys,zs,data,y_ml,Rs):
+    # xs,ys,zs are the vertices of the isosurface
+
+    # need to modify molstr to match target molecule and basis
+    # possibly change later on
+    
+    # define molecule
+    coords = data.pos_orig.tolist()
+    atomic_nums = data.z.tolist()
+    amber_Zs = data.amber_chg.tolist()
+    string_coords = []
+    for item, anum in zip(coords, atomic_nums):
+        string = ' '.join([str(elem) for elem in item])
+        if anum[0] == 1.0:
+            line = ' H  ' + string
+        elif anum[0] == 6.0:
+            line = ' C  ' + string
+        elif anum[0] == 7.0:
+            line = ' N  ' + string
+        elif anum[0] == 8.0:
+            line = ' O  ' + string
+        elif anum[0] == 15.0:
+            line = ' P ' + string
+        else:
+            raise ValueError("Atom type not found!")
+        string_coords.append(line)
+    molstr = """
+    {}
+     symmetry c1
+     no_reorient 
+     no_com
+     -2 1
+    """.format("\n".join(string_coords))
+    #print(molstr)
+    mol = psi4.geometry(molstr)
+     
+    # get nuclear coordinates and AMBER charges
+    # these coordinates are in bohr!
+    natom = mol.natom()
+    coords = []
+    for atom in range(natom):
+        coords.append(np.array([mol.x(atom), mol.y(atom), mol.z(atom)]))
+
+    if len(amber_Zs) != len(coords):
+        print("ERROR! Lengths of amber charges not the same as coords")
+        exit()
+    
+    # now loop through the points
+    target_potential = []
+    ml_potential = []
+    target_field = []
+    ml_field = []
+ 
+    # this assumes that the points here are given in angstroms
+    for x_pt, y_pt, z_pt in zip(xs,ys,zs):
+        x_bohr = x_pt/psi4.constants.bohr2angstroms
+        y_bohr = y_pt/psi4.constants.bohr2angstroms
+        z_bohr = z_pt/psi4.constants.bohr2angstroms
+        
+        # get amber potential
+        nuc_potential = 0.0
+        nuc_field = np.array([0.0, 0.0, 0.0])
+        for center, charge in zip(coords, amber_Zs):
+            x_nuc = x_bohr - center[0]
+            y_nuc = y_bohr - center[1]
+            z_nuc = z_bohr - center[2]
+            r_nuc = np.sqrt(x_nuc**2 + y_nuc**2 + z_nuc**2)
+            #print("pos",x_pt,y_pt,z_pt)
+            #print("center",center)
+            #print("rnuc",r_nuc)
+            if r_nuc > 0.00001:
+                nuc_potential += (charge/r_nuc).squeeze()
+                
+        position = np.array([x_bohr,y_bohr,z_bohr])
+         
+        target_potential.append(nuc_potential)    
+    
+    return np.array(target_potential)
+
+def get_standardization_parms(data, Rs):
+
+    means = np.zeros((len(data[0].x[1]),len(data[0].y[1])))
+    stds = np.zeros((len(data[0].x[1]),len(data[0].y[1])))
+
+    # loop through atom types
+    for x_ind in range(len(data[0].x[1])):
+
+        y_array = []
+
+        # loop through samples
+        for sample_num in range(len(data)):
+
+            # loop through atoms
+            for atm_num in range(len(data[sample_num].x)):
+                # find correct atom
+                if data[sample_num].x[atm_num][x_ind]==1:
+
+                    y_array.append(data[sample_num].y[atm_num])
+
+        # put data into numpy array
+        y_array_np = np.zeros((len(y_array),len(y_array[0])))
+        for ii in range(len(y_array)):
+            for jj in range(len(y_array[0])):
+                y_array_np[ii,jj]=y_array[ii][jj]
+
+        # take means and stds from L-corresponding coefficients
+        n_start = 0
+
+        mean_per_l = []
+        std_per_l = []
+
+        for mul, l in Rs:
+            #print("mul, l", mul, l)
+            for i_mul in range(mul):
+                mult = 2*l+1
+                n_end = n_start+mult
+                #print(n_start, n_end)
+                means[x_ind,n_start:n_end] = np.mean(y_array_np[:, n_start:n_end])
+                stds[x_ind,n_start:n_end] = np.std(y_array_np[:, n_start:n_end])
+                #mean_per_l.append(np.mean(y_array_np[:, n_start:n_end]))
+                #std_per_l.append(np.std(y_array_np[:, n_start:n_end]))
+
+                n_start = n_end
+
+        # fill in means and stds data
+
+    return(means, stds)
+
+def standardize_data(data, means, stds):
+
+    # loop through atom types
+    for x_ind in range(len(data.x[1])):
+
+        # loop through atoms in data
+        for atm_num in range(len(data.y)):
+
+            #check atom type
+            if data.x[atm_num][x_ind]==1:
+
+                for i_coeff in range(len(data.y[atm_num])):
+                    if stds[x_ind, i_coeff]==0:
+                        data.y[atm_num][i_coeff] = 0
+                    else:
+                        data.y[atm_num][i_coeff] = (data.y[atm_num][i_coeff]-means[x_ind,i_coeff])/stds[x_ind,i_coeff]
+
+    return
+
+def unstandardize_data(data, means, stds):
+
+    # loop through atom types
+    for x_ind in range(len(data.x[1])):
+
+        # loop through atoms in data
+        for atm_num in range(len(data.y)):
+
+            #check atom type
+            if data.x[atm_num][x_ind]==1:
+
+                for i_coeff in range(len(data.y[atm_num])):
+                    data.y[atm_num][i_coeff] = (data.y[atm_num][i_coeff]*stds[x_ind,i_coeff])+means[x_ind,i_coeff]
+
+    return
+
+def unstandardize_yml(y_ml, data, means, stds):
+
+    # loop through atoms in data
+    for atm_num in range(len(data.y)):
+
+        for x_ind in range(len(data.x[atm_num])):
+
+            if data.x[atm_num][x_ind]==1:
+                atm_type = x_ind
+
+        for i_coeff in range(len(data.y[atm_num])):
+            y_ml[atm_num][i_coeff] = (y_ml[atm_num][i_coeff]*stds[atm_type,i_coeff])+means[atm_type,i_coeff]
+
+    return
 
 
