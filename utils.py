@@ -182,7 +182,7 @@ def get_iso_dataset(picklefile, **atm_iso):
     return dataset
 
 # experimental version to rescale populations based on L-dependence
-# use with gau2grid_density_kdtree_lpop_sale
+# use with gau2grid_density_kdtree_lpop_ssale
 
 def get_iso_permuted_dataset_lpop_scale(picklefile, rs, **atm_iso):
     amberFlag=0
@@ -191,6 +191,7 @@ def get_iso_permuted_dataset_lpop_scale(picklefile, rs, **atm_iso):
     import torch
     import torch_geometric
     import copy
+    import numpy as np
 
     dataset = []
 
