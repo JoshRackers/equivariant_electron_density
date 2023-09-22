@@ -231,11 +231,15 @@ def get_dataset(filepath):
             points, num_atoms, atomic_numbers, elements, weighted_onehot = get_coordinates(filepath,xyzfile)
             N = num_atoms
 
+            doPac = False
+            if os.path.exists(filepath + xyzfile+"_charge"):
+                pac = get_pac(filepath, xyzfile, N)
+                doPac = True
+                
             # construct one hot encoding
             onehot = weighted_onehot
             # replace all nonzero values with 1
             onehot[onehot > 0.001] = 1
-
 
             # read in density file
             coefficients, exponents, norms, Rs_out_list = get_densities(filepath,densityfile,elements,N)
@@ -261,6 +265,11 @@ def get_dataset(filepath):
             for rss in b:
                 Rs_out_max.append(max(rss))
 
+            # HACKY: MANUAL OVERRIDE OF RS_OUT_MAX
+            # set manual Rs_out_max (comment out if desired)
+            #Rs_out_max=[(14, 0), (5, 1), (5, 2), (2, 3), (1, 4)]
+            #print("Using manual Rs_out_max:", Rs_out_max)
+
             ## now construct coefficient, exponent and norm arrays
             ## from Rs_out_max
             ## pad with zeros
@@ -285,7 +294,39 @@ def get_dataset(filepath):
                     max_n = max_mul*((2*max_l)+1)
                     counter += max_n
 
-            if doforces:
+            # dataset includes partial atomic charges
+            if doPac:
+
+                print("Dataset includes PAC")
+
+                # dataset includes energies and forces
+                if doforces:
+                    cluster_dict = {
+                        'type' : torch.Tensor(atomic_numbers),
+                        'pos' : torch.Tensor(points),
+                        'onehot' : torch.Tensor(onehot),
+                        'coefficients' : rect_coeffs,
+                        'exponents' : rect_expos,
+                        'norms' : rect_norms,
+                        'rs_max' : Rs_out_max,
+                        'energy' : torch.Tensor(energy),
+                        'forces' : torch.Tensor(forces),
+                        'pa_charges' : torch.Tensor(pac)
+                    }
+                else:
+                    cluster_dict = {
+                        'type' : torch.Tensor(atomic_numbers),
+                        'pos' : torch.Tensor(points),
+                        'onehot' : torch.Tensor(onehot),
+                        'coefficients' : rect_coeffs,
+                        'exponents' : rect_expos,
+                        'norms' : rect_norms,
+                        'rs_max' : Rs_out_max,
+                        'pa_charges' : torch.Tensor(pac)
+                    }
+
+            # dataset does NOT include partial atomic charges
+            elif doforces:
                 cluster_dict = {
                     'type' : torch.Tensor(atomic_numbers),
                     'pos' : torch.Tensor(points),
@@ -307,7 +348,6 @@ def get_dataset(filepath):
                     'norms' : rect_norms,
                     'rs_max' : Rs_out_max,
                 }
-
             dataset.append(cluster_dict)
 
     # reset onehot based on whole dataset
@@ -353,6 +393,32 @@ def get_dataset(filepath):
     print("irreps_out",Rs_out_max)
 
     return dataset
+
+# get partial atomic charges (from classical force field, for example)
+def get_pac(filepath, inputfile, N):
+    # partial atomic charges *_charge obtained from Amber parameter file
+    # assumes charges are ordered the same as the atoms in the *.xyz file
+
+    inputfile = filepath + "/" + inputfile
+    inputfile = inputfile+"_charge"
+
+    charge = []
+
+    with open(inputfile) as f:
+        charge_data=f.readlines()
+
+    for lines in charge_data:
+        line = lines.split()
+        if len(line)==1:
+            charge.append(float(line[0]))
+        else:
+            pass
+
+    if N != len(charge):
+        print("ERROR! Number of charges does not correspond to number of atoms!")
+        exit()
+
+    return charge
 
 ###############################
 # Start Program
